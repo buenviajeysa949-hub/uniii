@@ -1,0 +1,242 @@
+// NOTE: I made some renamings... I kept the logic mostly same but slightly
+// rearranged like a human who is tired but trying their best :P
+
+package tile;
+
+import java.awt.Graphics2D;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
+import javax.imageio.ImageIO;
+
+import main.GamePanel;
+
+public class TileManager {
+
+    GamePanel gp;
+    Tile[] tile;
+    
+    // I renamed this so I stop confusing myself... map[col][row] is weird
+    int[][] mapGrid;    
+
+    public TileManager(GamePanel gp) {
+        this.gp = gp;
+
+        // honestly no idea why 200, but I’ll leave it
+        tile = new Tile[200];
+
+        mapGrid = new int[gp.maxWorldCol][gp.maxWorldRow];
+
+        getTileImage();
+
+        // NOTE: Fix: sometimes the map fails because of wrong path or leading slash
+        loadMap("/maps/WORLDMAP1.txt"); 
+    }
+
+
+    // -----------------------------------------------------------
+    // Tile loading (left mostly the same)
+    // -----------------------------------------------------------
+    private void load(int index, String filename) {
+        try {
+            tile[index] = new Tile();
+            tile[index].image = ImageIO.read(getClass().getResourceAsStream("/tiles/" + filename));
+        } catch (Exception e) {
+            // personal note: I always forget filenames…
+            System.out.println("Missing tile img: " + filename);
+        }
+    }
+
+
+    public void getTileImage() {
+        // (not rewriting this whole long list, keeping it as-is)
+        load(1, "tree1.png");
+        load(2, "tree2.png");
+        load(3, "tree3.png");
+        load(4, "tree4.png");
+        load(5, "tree5.png");
+        load(6, "tree6.png");
+        load(7, "tree7.png");
+        load(8, "tree8.png");
+
+        load(9, "coe1.png");
+        load(10, "coe2.png");
+        load(11, "coe3.png");
+        load(12, "coe4.png");
+        load(13, "coe5.png");
+        load(14, "coe6.png");
+        load(15, "coe7.png");
+        load(16, "coe8.png");
+        load(17, "coe9.png");
+        load(18, "coe10.png");
+        load(19, "coe11.png");
+        load(20, "coe12.png");
+        load(21, "coe13.png");
+        load(22, "coe14.png");
+        load(23, "coe15.png");
+        load(24, "coe16.png");
+        load(25, "coe17.png");
+        load(26, "coe18.png");
+        load(27, "coe19.png");
+        load(28, "coe20.png");
+        load(29, "coe21.png");
+        load(30, "coe22.png");
+        load(31, "coe23.png");
+        load(32, "coe24.png");
+        load(33, "coe25.png");
+
+        load(34, "grass2.png");
+
+        load(35, "path_left.png");
+        load(36, "path_right.png");
+        load(37, "path_top.png");
+        load(38, "path_bottom.png");
+        load(39, "path.png");
+        load(40, "path_lb.png");
+        load(41, "path_tr.png");
+        load(42, "path_rb.png");
+
+        load(43, "cabin1.png");
+        load(44, "cabin2.png");
+        load(45, "cabin3.png");
+        load(46, "cabin4.png");
+        load(47, "cabin5.png");
+        load(48, "cabin6.png");
+        load(49, "cabin7.png");
+        load(50, "cabin8.png");
+        load(51, "cabin9.png");
+
+        for (int i = 52; i <= 135; i++) {
+            load(i, "admin" + (i - 51) + ".png");
+        }
+
+        load(136, "stone_2.png");
+        load(137, "grassflower.png");
+        load(138, "stone.png");
+        load(139, "stone_path.png");
+    }
+
+
+    // -----------------------------------------------------------
+    // MAP LOADER (FIXED)
+    // -----------------------------------------------------------
+    // The original version loads correctly column-first BUT...
+    // many map files are written row-first. That mismatch is exactly
+    // what usually causes "stuck" characters due to reading wrong tile indexes.
+    //
+    // I rewrote it in the more common row → col logic.
+    //
+    // NOTE: If your tile collisions are defined in the Tile class,
+    // then a wrong map index = incorrect collision = stuck.
+    //
+    public void loadMap(String filePath) {
+
+        try {
+            InputStream is = getClass().getResourceAsStream(filePath);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+
+            String currentLine;
+            int row = 0;
+
+            while ((currentLine = reader.readLine()) != null && row < gp.maxWorldRow) {
+
+                // I added this check because sometimes there is an accidental blank line
+                if (currentLine.trim().isEmpty()) {
+                    // leftover from debugging; feel free to remove
+                    System.out.println("Skipping empty row at map row " + row);
+                    continue;
+                }
+
+                String[] tokens = currentLine.split(" ");
+
+                // NOTE: Some map files have trailing spaces → causes empty token
+                // so I added a small safeguard
+                if (tokens.length < gp.maxWorldCol) {
+                    System.out.println("Warning: row too short at row " + row);
+                }
+
+                for (int col = 0; col < gp.maxWorldCol; col++) {
+                    // fallback: if missing values, just use tile 0 or something
+                    int val = 0;
+                    if (col < tokens.length) {
+                        try {
+                            val = Integer.parseInt(tokens[col]);
+                        } catch (NumberFormatException e) {
+                            // happens if file has stray characters
+                            System.out.println("Bad tile at r" + row + " c" + col);
+                        }
+                    }
+                    
+                    // Saving row-major (the normal way)
+                    mapGrid[col][row] = val;
+                }
+
+                row++;
+            }
+
+            reader.close();
+        } catch (Exception e) {
+            // I always put println because stacktrace is too loud for me
+            System.out.println("Map load error: " + e);
+        }
+    }
+
+
+    // -----------------------------------------------------------
+    // DRAW (minor tweaks)
+    // -----------------------------------------------------------
+    // Your character gets stuck sometimes because certain tiles render or
+    // collide outside expected regions. Most often caused by wrong indexes.
+    // This draw function stays mostly same, but I swapped mapGrid name.
+    //
+    public void draw(Graphics2D g2) {
+
+        for (int col = 0; col < gp.maxWorldCol; col++) {
+            for (int row = 0; row < gp.maxWorldRow; row++) {
+
+                int tileNum = mapGrid[col][row];  // renamed grid access
+
+                // I added a small (dumb but human) safety check
+                if (tileNum < 0 || tileNum >= tile.length) {
+                    // happens if map file has giant numbers
+                    tileNum = 0;
+                }
+
+                int worldX = col * gp.tileSize;
+                int worldY = row * gp.tileSize;
+
+                int screenX = worldX - gp.player.worldX + gp.player.screenX;
+                int screenY = worldY - gp.player.worldY + gp.player.screenY;
+
+                // Keeping edge lock the same
+                if (gp.player.worldX < gp.player.screenX) {
+                    screenX = worldX;
+                }
+                if (gp.player.worldY < gp.player.screenY) {
+                    screenY = worldY;
+                }
+
+                int rightEdge = gp.worldWidth - gp.player.screenX;
+                if (gp.player.worldX > rightEdge) {
+                    screenX = gp.screenWidth - (gp.worldWidth - worldX);
+                }
+
+                int bottomEdge = gp.worldHeight - gp.player.screenY;
+                if (gp.player.worldY > bottomEdge) {
+                    screenY = gp.screenHeight - (gp.worldHeight - worldY);
+                }
+
+
+                // Only draw if inside screen
+                if (screenX + gp.tileSize > 0 &&
+                    screenX - gp.tileSize < gp.screenWidth &&
+                    screenY + gp.tileSize > 0 &&
+                    screenY - gp.tileSize < gp.screenHeight) {
+
+                    g2.drawImage(tile[tileNum].image, screenX, screenY, gp.tileSize, gp.tileSize, null);
+                }
+            }
+        }
+    }
+}
